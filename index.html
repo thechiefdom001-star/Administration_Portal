@@ -4,9 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KAAS - Kenya Area Administration System</title>
+    <title>KAAS - Kenya Area Administration Systems</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -1737,6 +1738,7 @@
                 { id: 'createCase', icon: 'fa-plus-circle', label: 'New Case', roles: ['chief', 'desk_officer', 'resident'] },
                 { id: 'documents', icon: 'fa-file-alt', label: 'Documents', roles: ['chief', 'desk_officer'] },
                 { id: 'reports', icon: 'fa-chart-bar', label: 'Reports', roles: ['chief', 'desk_officer'] },
+                { id: 'analytics', icon: 'fa-chart-pie', label: 'Crime Analysis', roles: ['chief', 'desk_officer'] },
                 { id: 'settings', icon: 'fa-cog', label: 'Settings', roles: ['chief'] }
             ];
 
@@ -1755,6 +1757,7 @@
             if (page === 'createCase') editingCaseId = null;
             if (page === 'createDocument') editingDocumentId = null;
             if (page === 'resolvedCases') editingCaseId = null;
+            if (page === 'analytics') document.getElementById('pageTitle').textContent = 'Crime & Case Analytics';
 
             document.getElementById('pageTitle').textContent = getPageTitle(page);
             renderNavigation();
@@ -1768,6 +1771,7 @@
                 documents: loadDocuments,
                 createDocument: renderCreateDocument,
                 reports: loadReports,
+                analytics: loadAnalytics,
                 resolvedCases: loadResolvedCases,
                 settings: loadSettings
             };
@@ -1797,6 +1801,7 @@
                 createCase: 'New Application Request',
                 documents: 'Document Registry',
                 reports: 'System Reports',
+                analytics: 'Crime & Case Analytics',
                 resolvedCases: 'Resolved Archive',
                 settings: 'System Settings'
             };
@@ -1858,9 +1863,8 @@
                 '<div class="stat-card"><div style="position:absolute;top:0;left:0;right:0;height:4px;background:#D4AF37;"></div><div style="display:flex;align-items:flex-start;gap:18px;"><div class="stat-icon" style="background:rgba(212,175,55,0.1);color:#D4AF37;"><i class="fas fa-percentage"></i></div><div><h3 style="font-size:32px;font-weight:700;line-height:1;margin-bottom:6px;">' + (stats.resolutionRate || 0) + '%</h3><p style="font-size:14px;color:#6B7280;">Resolution Rate</p></div></div></div>' +
                 '</div>' +
                 '<div style="display:grid; grid-template-columns: 1fr 350px; gap:24px; margin-bottom:24px;">' +
-                '<div class="card" style="margin-bottom:0;"><div class="card-header"><h3 class="card-title">Quick Actions</h3></div>' + quickActions + '</div>' +
-                '<div class="card" style="margin-bottom:0; padding:0;">' +
-                '<div class="card-header" style="padding:16px 24px;"><h3 class="card-title">Latest Announcements</h3></div>' +
+                '<div class="card" style="margin-bottom:0;"><div class="card-header" style="background:linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); margin:-24px -24px 16px -24px; padding:16px 24px; border-radius:12px 12px 0 0;"><h3 class="card-title" style="color:white; margin:0;"><i class="fas fa-bolt" style="margin-right:8px;"></i>Quick Actions</h3></div>' + quickActions + '</div>' +
+                '<div class="card" style="margin-bottom:0; padding:0;"><div class="card-header" style="background:linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%); padding:16px 24px; border-radius:12px 12px 0 0;"><h3 class="card-title" style="color:white; margin:0;"><i class="fas fa-bullhorn" style="margin-right:8px;"></i>Latest Announcements</h3></div>' +
                 '<div style="max-height:220px; overflow-y:auto;">' + announcementsHtml + '</div>' +
                 '<div style="padding:12px; text-align:center; border-top:1px solid #F3F4F6;"><button class="btn btn-sm" style="color:#4F46E5; background:none; border:none; font-weight:600;" onclick="navigateTo(\'announcements\')">View All Announcements</button></div>' +
                 '</div>' +
@@ -2641,6 +2645,482 @@
                 '</div>';
         }
 
+        function loadAnalytics() {
+            var contentArea = document.getElementById('contentArea');
+            contentArea.innerHTML = '' +
+                '<div class="card" style="margin-bottom:24px;">' +
+                '<div class="card-header" style="background:linear-gradient(135deg, #1E3A5F 0%, #2E5A8F 100%); margin:-24px -24px 20px -24px; padding:20px 24px; border-radius:12px 12px 0 0;">' +
+                '<h3 class="card-title" style="color:white; margin:0; font-size:18px;"><i class="fas fa-chart-line" style="margin-right:10px;"></i>Crime & Case Analytics Dashboard</h3>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:16px; margin-bottom:24px;">' +
+                '<div style="background:linear-gradient(135deg, #4F46E5, #7C3AED); color:white; padding:20px; border-radius:12px; text-align:center;">' +
+                '<div style="font-size:32px; font-weight:700;" id="analyticsTotalCases">0</div>' +
+                '<div style="font-size:12px; opacity:0.9;">Total Cases</div>' +
+                '</div>' +
+                '<div style="background:linear-gradient(135deg, #00A651, #00C853); color:white; padding:20px; border-radius:12px; text-align:center;">' +
+                '<div style="font-size:32px; font-weight:700;" id="analyticsResolved">0</div>' +
+                '<div style="font-size:12px; opacity:0.9;">Resolved</div>' +
+                '</div>' +
+                '<div style="background:linear-gradient(135deg, #FF6B35, #FF8E53); color:white; padding:20px; border-radius:12px; text-align:center;">' +
+                '<div style="font-size:32px; font-weight:700;" id="analyticsPending">0</div>' +
+                '<div style="font-size:12px; opacity:0.9;">Pending</div>' +
+                '</div>' +
+                '<div style="background:linear-gradient(135deg, #D4AF37, #E8C547); color:white; padding:20px; border-radius:12px; text-align:center;">' +
+                '<div style="font-size:32px; font-weight:700;" id="analyticsRate">0%</div>' +
+                '<div style="font-size:12px; opacity:0.9;">Resolution Rate</div>' +
+                '</div>' +
+                '</div>' +
+                '<div style="margin-bottom:20px; display:flex; gap:12px; flex-wrap:wrap;">' +
+                '<select id="analyticsYearFilter" class="form-control" style="width:auto; min-width:120px;" onchange="updateAnalytics()">' +
+                '<option value="all">All Years</option>' +
+                '</select>' +
+                '<select id="analyticsMonthFilter" class="form-control" style="width:auto; min-width:140px;" onchange="updateAnalytics()">' +
+                '<option value="all">All Months</option>' +
+                '<option value="0">January</option><option value="1">February</option><option value="2">March</option>' +
+                '<option value="3">April</option><option value="4">May</option><option value="5">June</option>' +
+                '<option value="6">July</option><option value="7">August</option><option value="8">September</option>' +
+                '<option value="9">October</option><option value="10">November</option><option value="11">December</option>' +
+                '</select>' +
+                '<button class="btn btn-primary btn-sm" onclick="printAnalytics()"><i class="fas fa-print"></i> Print for Baraza</button>' +
+                '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:24px;">' +
+                '<div class="card" style="margin-bottom:0;">' +
+                '<div class="card-header" style="background:#F8FAFC; border-bottom:1px solid #E5E7EB; margin:-24px -24px 20px -24px; padding:16px 24px; border-radius:12px 12px 0 0;">' +
+                '<h4 style="margin:0; font-size:15px; color:#1E3A5F;"><i class="fas fa-calendar-alt" style="margin-right:8px; color:#4F46E5;"></i>Monthly Case Trends</h4>' +
+                '</div>' +
+                '<div style="height:300px;">' +
+                '<canvas id="monthlyChart"></canvas>' +
+                '</div>' +
+                '</div>' +
+                '<div class="card" style="margin-bottom:0;">' +
+                '<div class="card-header" style="background:#F8FAFC; border-bottom:1px solid #E5E7EB; margin:-24px -24px 20px -24px; padding:16px 24px; border-radius:12px 12px 0 0;">' +
+                '<h4 style="margin:0; font-size:15px; color:#1E3A5F;"><i class="fas fa-tags" style="margin-right:8px; color:#FF6B35;"></i>Cases by Type</h4>' +
+                '</div>' +
+                '<div style="height:300px;">' +
+                '<canvas id="typeChart"></canvas>' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:24px;">' +
+                '<div class="card" style="margin-bottom:0;">' +
+                '<div class="card-header" style="background:#F8FAFC; border-bottom:1px solid #E5E7EB; margin:-24px -24px 20px -24px; padding:16px 24px; border-radius:12px 12px 0 0;">' +
+                '<h4 style="margin:0; font-size:15px; color:#1E3A5F;"><i class="fas fa-check-circle" style="margin-right:8px; color:#00A651;"></i>Resolution Status</h4>' +
+                '</div>' +
+                '<div style="height:280px; display:flex; justify-content:center;">' +
+                '<canvas id="statusChart"></canvas>' +
+                '</div>' +
+                '</div>' +
+                '<div class="card" style="margin-bottom:0;">' +
+                '<div class="card-header" style="background:#F8FAFC; border-bottom:1px solid #E5E7EB; margin:-24px -24px 20px -24px; padding:16px 24px; border-radius:12px 12px 0 0;">' +
+                '<h4 style="margin:0; font-size:15px; color:#1E3A5F;"><i class="fas fa-exclamation-triangle" style="margin-right:8px; color:#DC143C;"></i>Priority Distribution</h4>' +
+                '</div>' +
+                '<div style="height:280px; display:flex; justify-content:center;">' +
+                '<canvas id="priorityChart"></canvas>' +
+                '</div>' +
+                '</div>' +
+                '</div>' +
+                '<div class="card" style="background:linear-gradient(135deg, #F8FAFC 0%, #FFFFFF 100%);">' +
+                '<div class="card-header" style="border-bottom:2px solid #E5E7EB; margin-bottom:20px;">' +
+                '<h4 style="margin:0; font-size:16px; color:#1E3A5F;"><i class="fas fa-lightbulb" style="margin-right:10px; color:#D4AF37;"></i>Chief\'s Insights & Recommendations for Public Baraza</h4>' +
+                '</div>' +
+                '<div id="analyticsInsights" style="font-size:14px; line-height:1.8; color:#374151;">' +
+                '<p style="color:#6B7280; font-style:italic;">Loading insights based on case data analysis...</p>' +
+                '</div>' +
+                '</div>';
+
+            // Fetch and process data
+            fetchAnalyticsData();
+        }
+
+        var analyticsCharts = {};
+
+        function fetchAnalyticsData() {
+            apiRequest('getCases', { token: authToken })
+                .then(function(result) {
+                    if (result && result.success) {
+                        var allCases = result.cases || [];
+                        processAnalyticsData(allCases);
+                    } else {
+                        showToast('Failed to load analytics data', 'error');
+                    }
+                })
+                .catch(function(error) {
+                    showToast('Error loading analytics: ' + error.message, 'error');
+                });
+        }
+
+        function processAnalyticsData(cases) {
+            // Populate year filter
+            var years = [...new Set(cases.map(function(c) {
+                return new Date(c.createdAt).getFullYear();
+            }))].sort().reverse();
+
+            var yearSelect = document.getElementById('analyticsYearFilter');
+            if (yearSelect && yearSelect.options.length <= 1) {
+                years.forEach(function(year) {
+                    var opt = document.createElement('option');
+                    opt.value = year;
+                    opt.textContent = year;
+                    yearSelect.appendChild(opt);
+                });
+            }
+
+            updateAnalytics();
+        }
+
+        function updateAnalytics() {
+            apiRequest('getCases', { token: authToken })
+                .then(function(result) {
+                    if (result && result.success) {
+                        var allCases = result.cases || [];
+                        var yearFilter = document.getElementById('analyticsYearFilter').value;
+                        var monthFilter = document.getElementById('analyticsMonthFilter').value;
+
+                        // Filter cases
+                        var filteredCases = allCases.filter(function(c) {
+                            var date = new Date(c.createdAt);
+                            var yearMatch = yearFilter === 'all' || date.getFullYear().toString() === yearFilter;
+                            var monthMatch = monthFilter === 'all' || date.getMonth().toString() === monthFilter;
+                            return yearMatch && monthMatch;
+                        });
+
+                        renderAnalyticsCharts(filteredCases);
+                        generateInsights(filteredCases);
+                        updateStats(filteredCases);
+                    }
+                });
+        }
+
+        function updateStats(cases) {
+            var total = cases.length;
+            var resolved = cases.filter(function(c) { return c.status === 'resolved'; }).length;
+            var pending = cases.filter(function(c) { return c.status === 'pending'; }).length;
+            var rate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+
+            document.getElementById('analyticsTotalCases').textContent = total;
+            document.getElementById('analyticsResolved').textContent = resolved;
+            document.getElementById('analyticsPending').textContent = pending;
+            document.getElementById('analyticsRate').textContent = rate + '%';
+        }
+
+        function renderAnalyticsCharts(cases) {
+            var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            var monthlyData = new Array(12).fill(0);
+            var typeCounts = {};
+            var statusCounts = { resolved: 0, pending: 0, inProgress: 0 };
+            var priorityCounts = { high: 0, medium: 0, low: 0 };
+
+            cases.forEach(function(c) {
+                var date = new Date(c.createdAt);
+                monthlyData[date.getMonth()]++;
+
+                typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
+
+                if (c.status === 'resolved') statusCounts.resolved++;
+                else if (c.status === 'pending') statusCounts.pending++;
+                else statusCounts.inProgress++;
+
+                var priority = (c.priority || 'medium').toLowerCase();
+                if (priorityCounts[priority] !== undefined) priorityCounts[priority]++;
+            });
+
+            // Destroy existing charts
+            Object.values(analyticsCharts).forEach(function(chart) { if (chart) chart.destroy(); });
+
+            // Monthly trends chart
+            var monthlyCtx = document.getElementById('monthlyChart');
+            if (monthlyCtx) {
+                analyticsCharts.monthly = new Chart(monthlyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: months,
+                        datasets: [{
+                            label: 'Cases Reported',
+                            data: monthlyData,
+                            backgroundColor: 'rgba(79, 70, 229, 0.7)',
+                            borderColor: '#4F46E5',
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: false }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                        }
+                    }
+                });
+            }
+
+            // Case types chart
+            var typeCtx = document.getElementById('typeChart');
+            if (typeCtx && Object.keys(typeCounts).length > 0) {
+                var typeColors = ['#4F46E5', '#FF6B35', '#00A651', '#D4AF37', '#DC143C', '#7C3AED', '#0EA5E9', '#8B5CF6'];
+                analyticsCharts.type = new Chart(typeCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(typeCounts).map(function(t) { return formatCaseType(t); }),
+                        datasets: [{
+                            data: Object.values(typeCounts),
+                            backgroundColor: typeColors,
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }
+                        }
+                    }
+                });
+            }
+
+            // Status chart
+            var statusCtx = document.getElementById('statusChart');
+            if (statusCtx) {
+                analyticsCharts.status = new Chart(statusCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Resolved', 'Pending', 'In Progress'],
+                        datasets: [{
+                            data: [statusCounts.resolved, statusCounts.pending, statusCounts.inProgress],
+                            backgroundColor: ['#00A651', '#FF6B35', '#4F46E5'],
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+                        }
+                    }
+                });
+            }
+
+            // Priority chart
+            var priorityCtx = document.getElementById('priorityChart');
+            if (priorityCtx) {
+                analyticsCharts.priority = new Chart(priorityCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['High', 'Medium', 'Low'],
+                        datasets: [{
+                            label: 'Cases',
+                            data: [priorityCounts.high, priorityCounts.medium, priorityCounts.low],
+                            backgroundColor: ['#DC143C', '#FF6B35', '#00A651'],
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                    }
+                });
+            }
+        }
+
+        function generateInsights(cases) {
+            var insightsDiv = document.getElementById('analyticsInsights');
+            if (!insightsDiv) return;
+
+            var total = cases.length;
+            if (total === 0) {
+                insightsDiv.innerHTML = '<p style="color:#6B7280;">No case data available for the selected period.</p>';
+                return;
+            }
+
+            var typeCounts = {};
+            var priorityCounts = { high: 0, medium: 0, low: 0 };
+            var statusCounts = { resolved: 0, pending: 0, inProgress: 0 };
+            var monthlyCounts = new Array(12).fill(0);
+
+            cases.forEach(function(c) {
+                typeCounts[c.type] = (typeCounts[c.type] || 0) + 1;
+                priorityCounts[c.priority || 'medium']++;
+                if (c.status === 'resolved') statusCounts.resolved++;
+                else if (c.status === 'pending') statusCounts.pending++;
+                else statusCounts.inProgress++;
+                monthlyCounts[new Date(c.createdAt).getMonth()]++;
+            });
+
+            var topType = Object.entries(typeCounts).sort(function(a, b) { return b[1] - a[1]; })[0];
+            var topTypes = Object.entries(typeCounts).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 3);
+            var peakMonth = monthlyCounts.indexOf(Math.max(...monthlyCounts));
+            var resolutionRate = Math.round((statusCounts.resolved / total) * 100);
+            var highPriorityRate = Math.round((priorityCounts.high / total) * 100);
+            var avgCasesPerMonth = Math.round(total / 12 * 10) / 10;
+
+            var yearFilter = document.getElementById('analyticsYearFilter');
+            var monthFilter = document.getElementById('analyticsMonthFilter');
+            var periodText = '';
+            if (yearFilter && yearFilter.value !== 'all') periodText += yearFilter.value;
+            if (monthFilter && monthFilter.value !== 'all') {
+                var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+                periodText = monthNames[parseInt(monthFilter.value)] + ' ' + periodText;
+            }
+            if (!periodText) periodText = 'the selected period';
+
+            var reportHtml = '<div id="printableAnalytics">' +
+                // Header with Logo and Location
+                '<div class="print-header" style="text-align:center; border-bottom:3px double #1E3A5F; padding-bottom:20px; margin-bottom:30px;">' +
+                (cachedSettings && cachedSettings.logoUrl ? '<img src="' + escapeHtml(cachedSettings.logoUrl) + '" alt="Office Logo" style="width:80px;height:80px;object-fit:contain;border-radius:8px;border:1px solid #E5E7EB;padding:4px;display:block;margin:0 auto 10px;">' : '') +
+                '<div style="font-size:24px; font-weight:700; color:#1E3A5F; margin-bottom:8px;">KENYA AREA ADMINISTRATION SYSTEMS (KAAS)</div>' +
+                '<div style="font-size:18px; color:#2E5A8F; margin-bottom:5px;">Crime & Case Analysis Report</div>' +
+                (cachedSettings && cachedSettings.location ? '<div style="font-size:16px; color:#1E3A5F; font-weight:600; margin-bottom:5px;">' + escapeHtml(cachedSettings.location) + '</div>' : '') +
+                '<div style="font-size:14px; color:#6B7280;">Period: ' + periodText + '</div>' +
+                '<div style="font-size:12px; color:#9CA3AF; margin-top:10px;">Report Generated: ' + new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + '</div>' +
+                '</div>' +
+                // INTRODUCTION
+                '<div style="margin-bottom:25px;">' +
+                '<h2 style="color:#1E3A5F; font-size:18px; border-bottom:2px solid #E5E7EB; padding-bottom:10px; margin-bottom:15px;"><i class="fas fa-file-alt" style="margin-right:10px;"></i>1. INTRODUCTION</h2>' +
+                '<p style="line-height:1.8; text-align:justify; margin-bottom:15px;">' +
+                'This comprehensive analytical report presents a detailed examination of cases reported to the Chief\'s Office during <strong>' + periodText + '</strong>. The purpose of this analysis is to provide data-driven insights into community challenges, identify emerging patterns in case reporting, and establish evidence-based recommendations for the upcoming Public Baraza and future administrative planning.' +
+                '</p>' +
+                '<p style="line-height:1.8; text-align:justify;">' +
+                'The Chief\'s Office received a total of <strong>' + total + ' cases</strong> during this period, representing an average of <strong>' + avgCasesPerMonth + ' cases per month</strong>. These cases span various categories including ' + Object.keys(typeCounts).map(function(t) { return formatCaseType(t).toLowerCase(); }).join(', ') + '. The analysis examines case types, resolution rates, temporal patterns, and priority distributions to inform community safety strategies and resource allocation decisions.' +
+                '</p>' +
+                '</div>' +
+                // EXECUTIVE SUMMARY BOX
+                '<div style="background:linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%); border:2px solid #4F46E5; border-radius:12px; padding:20px; margin-bottom:25px;">' +
+                '<h3 style="color:#4F46E5; font-size:16px; margin-bottom:15px;"><i class="fas fa-chart-bar" style="margin-right:8px;"></i>Executive Summary</h3>' +
+                '<div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:15px; font-size:14px;">' +
+                '<div><strong style="color:#1E3A5F;">Total Cases:</strong> ' + total + '</div>' +
+                '<div><strong style="color:#1E3A5F;">Resolution Rate:</strong> ' + resolutionRate + '%</div>' +
+                '<div><strong style="color:#1E3A5F;">Resolved Cases:</strong> ' + statusCounts.resolved + '</div>' +
+                '<div><strong style="color:#1E3A5F;">Pending Cases:</strong> ' + statusCounts.pending + '</div>' +
+                '<div><strong style="color:#1E3A5F;">Peak Month:</strong> ' + ['January','February','March','April','May','June','July','August','September','October','November','December'][peakMonth] + '</div>' +
+                '<div><strong style="color:#1E3A5F;">High Priority Rate:</strong> ' + highPriorityRate + '%</div>' +
+                '</div>' +
+                '</div>' +
+                // BODY - KEY FINDINGS
+                '<div style="margin-bottom:25px;">' +
+                '<h2 style="color:#1E3A5F; font-size:18px; border-bottom:2px solid #E5E7EB; padding-bottom:10px; margin-bottom:15px;"><i class="fas fa-search" style="margin-right:10px;"></i>2. KEY FINDINGS AND ANALYSIS</h2>' +
+                // Finding 1
+                '<div style="margin-bottom:20px; padding-left:20px; border-left:4px solid #4F46E5;">' +
+                '<h3 style="color:#4F46E5; font-size:15px; margin-bottom:10px;">2.1 Primary Case Categories</h3>' +
+                '<p style="line-height:1.8; text-align:justify; margin-bottom:10px;">' +
+                'The analysis reveals that <strong>' + formatCaseType(topType[0]) + '</strong> represents the most significant challenge facing the community, accounting for <strong>' + Math.round((topType[1]/total)*100) + '%</strong> of all reported cases (' + topType[1] + ' cases). This category demands immediate attention and targeted intervention strategies.' +
+                '</p>' +
+                '<p style="line-height:1.8; text-align:justify; color:#6B7280; font-size:13px;">' +
+                'The top three case types are: ' + topTypes.map(function(t, i) { return (i+1) + '. ' + formatCaseType(t[0]) + ' (' + t[1] + ' cases, ' + Math.round((t[1]/total)*100) + '%)'; }).join('; ') + '.' +
+                '</p>' +
+                '</div>' +
+                // Finding 2
+                '<div style="margin-bottom:20px; padding-left:20px; border-left:4px solid #FF6B35;">' +
+                '<h3 style="color:#FF6B35; font-size:15px; margin-bottom:10px;">2.2 Temporal Patterns and Seasonal Trends</h3>' +
+                '<p style="line-height:1.8; text-align:justify;">' +
+                '<strong>' + ['January','February','March','April','May','June','July','August','September','October','November','December'][peakMonth] + '</strong> recorded the highest volume of case reporting with <strong>' + monthlyCounts[peakMonth] + ' cases</strong>. This temporal concentration suggests potential seasonal factors influencing community disputes and reporting behaviors. The Chief\'s Office should consider deploying additional resources and conducting preventive community engagement during this peak period in subsequent years.' +
+                '</p>' +
+                '</div>' +
+                // Finding 3
+                '<div style="margin-bottom:20px; padding-left:20px; border-left:4px solid #00A651;">' +
+                '<h3 style="color:#00A651; font-size:15px; margin-bottom:10px;">2.3 Case Resolution Performance</h3>' +
+                '<p style="line-height:1.8; text-align:justify;">' +
+                'The office achieved a <strong style="color:' + (resolutionRate >= 70 ? '#00A651' : '#FF6B35') + ';">' + resolutionRate + '% resolution rate</strong>, having successfully resolved <strong>' + statusCounts.resolved + ' out of ' + total + ' cases</strong>. ' +
+                (resolutionRate >= 70 ? 'This performance exceeds standard benchmarks and demonstrates effective case management and community dispute resolution capabilities. The administrative procedures and community engagement strategies should be documented as best practices for replication.' : 'While progress has been made, the resolution rate indicates opportunities for improving case processing efficiency. A review of pending cases (' + statusCounts.pending + ') is recommended to identify bottlenecks and streamline resolution procedures.') +
+                '</p>' +
+                '</div>' +
+                // Finding 4
+                '<div style="margin-bottom:20px; padding-left:20px; border-left:4px solid #DC143C;">' +
+                '<h3 style="color:#DC143C; font-size:15px; margin-bottom:10px;">2.4 Priority Assessment and Risk Indicators</h3>' +
+                '<p style="line-height:1.8; text-align:justify;">' +
+                'Approximately <strong>' + highPriorityRate + '% of all cases</strong> were classified as high priority, involving matters requiring urgent intervention. ' +
+                (highPriorityRate > 30 ? 'This elevated proportion of critical cases indicates significant community stressors and potential underlying systemic issues that warrant comprehensive attention through coordinated multi-stakeholder interventions.' : 'The distribution of priority levels reflects manageable community challenges, with the majority of matters being addressed through standard administrative procedures.') +
+                '</p>' +
+                '</div>' +
+                '</div>' +
+                // RECOMMENDATIONS
+                '<div style="margin-bottom:25px;">' +
+                '<h2 style="color:#1E3A5F; font-size:18px; border-bottom:2px solid #E5E7EB; padding-bottom:10px; margin-bottom:15px;"><i class="fas fa-lightbulb" style="margin-right:10px;"></i>3. RECOMMENDATIONS FOR PUBLIC BARAZA</h2>' +
+                '<div style="background:#FEF3C7; border-left:4px solid #D4AF37; padding:20px; border-radius:0 8px 8px 0; margin-bottom:20px;">' +
+                '<h3 style="color:#92400E; font-size:15px; margin-bottom:15px;"><i class="fas fa-users" style="margin-right:8px;"></i>Key Discussion Points for the Chief</h3>' +
+                '<ol style="line-height:1.8; padding-left:20px; color:#78350F;">' +
+                '<li style="margin-bottom:12px;"><strong>Focus on ' + formatCaseType(topType[0]) + ':</strong> Dedicate significant Baraza time to discussing prevention strategies for ' + formatCaseType(topType[0]).toLowerCase() + '. Engage community leaders, elders, and affected parties in identifying root causes and community-based solutions.</li>' +
+                '<li style="margin-bottom:12px;"><strong>' + ['January','February','March','April','May','June','July','August','September','October','November','December'][peakMonth] + ' Preparedness:</strong> Establish early warning systems and preventive measures before the peak reporting month to reduce incident occurrences.</li>' +
+                '<li style="margin-bottom:12px;"><strong>' + (resolutionRate < 70 ? 'Clearing Backlog Initiative:' : 'Maintaining Excellence:') + '</strong> ' + (resolutionRate < 70 ? 'Launch a community-supported initiative to resolve the ' + statusCounts.pending + ' pending cases, demonstrating responsiveness to citizen concerns.' : 'Share successful resolution strategies with the community to build confidence and encourage peaceful dispute resolution.') + '</li>' +
+                '<li style="margin-bottom:12px;"><strong>Community Education:</strong> Implement awareness programs addressing the most common issues identified in this analysis.</li>' +
+                '<li><strong>Resource Allocation:</strong> Direct administrative resources toward the top three case categories for maximum community impact.</li>' +
+                '</ol>' +
+                '</div>' +
+                '</div>' +
+                // CONCLUSION
+                '<div style="margin-bottom:25px;">' +
+                '<h2 style="color:#1E3A5F; font-size:18px; border-bottom:2px solid #E5E7EB; padding-bottom:10px; margin-bottom:15px;"><i class="fas fa-flag-checkered" style="margin-right:10px;"></i>4. CONCLUSION</h2>' +
+                '<p style="line-height:1.8; text-align:justify; margin-bottom:15px;">' +
+                'This analysis demonstrates that the Chief\'s Office serves as a vital institution for community dispute resolution and administrative justice during ' + periodText + '. The data reveals both challenges and opportunities: while <strong>' + formatCaseType(topType[0]).toLowerCase() + '</strong> presents the most frequent concern, the office\'s ' + resolutionRate + '% resolution rate reflects commitment to addressing citizen grievances.' +
+                '</p>' +
+                '<p style="line-height:1.8; text-align:justify; margin-bottom:15px;">' +
+                'The upcoming Public Baraza presents an essential opportunity to present these findings transparently to the community, solicit feedback on proposed interventions, and strengthen the collaborative relationship between the administration and residents. Evidence-based governance, as demonstrated through this analysis, builds trust and enhances the effectiveness of traditional administrative structures in modern Kenya.' +
+                '</p>' +
+                '<p style="line-height:1.8; text-align:justify;">' +
+                '<strong>Next Steps:</strong> The Chief is encouraged to present this analysis at the Baraza, facilitate community discussions on the identified priority areas, and establish measurable targets for the next reporting period. Regular monitoring and quarterly analytical reviews will ensure continuous improvement in service delivery to the community.' +
+                '</p>' +
+                '</div>' +
+                // SIGNATURE
+                '<div style="margin-top:40px; padding-top:20px; border-top:2px solid #E5E7EB;">' +
+                '<div style="text-align:right; font-size:14px;">' +
+                '<p style="margin-bottom:30px;">_______________________________<br><strong>Area Chief</strong><br>Kenya Area Administration Systems</p>' +
+                '<p style="color:#6B7280; font-size:12px; font-style:italic;">This report is generated automatically by KAAS. For queries, contact the Chief\'s Office.</p>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+
+            insightsDiv.innerHTML = reportHtml;
+        }
+
+        function printAnalytics() {
+            var printContent = document.getElementById('analyticsInsights').innerHTML;
+            if (!printContent || printContent.indexOf('printableAnalytics') === -1) {
+                showToast('Please generate the analysis first before printing.', 'warning');
+                return;
+            }
+
+            var printWindow = window.open('', '_blank');
+            var doc = printWindow.document;
+            doc.open();
+            doc.write('<!DOCTYPE html><html><head><title>KAAS Crime Analysis Report</title>');
+            doc.write('<style>');
+            doc.write('body{font-family:Georgia,serif;line-height:1.6;color:#333;max-width:800px;margin:40px auto;padding:20px;}');
+            doc.write('h1{color:#1E3A5F;border-bottom:3px double #1E3A5F;padding-bottom:15px;text-align:center;}');
+            doc.write('h2{color:#1E3A5F;font-size:18px;border-bottom:2px solid #E5E7EB;padding-bottom:10px;margin-top:30px;}');
+            doc.write('p{text-align:justify;margin-bottom:15px;}');
+            doc.write('strong{color:#1E3A5F;}');
+            doc.write('<\/style><\/head><body>');
+            doc.write(printContent);
+            doc.write('<\/body><\/html>');
+            doc.close();
+
+            setTimeout(function() {
+                printWindow.print();
+            }, 500);
+        }
+
+        function formatCaseType(type) {
+            var typeMap = {
+                'civil': 'Civil Dispute',
+                'criminal': 'Criminal Case',
+                'land': 'Land Dispute',
+                'family': 'Family Matter',
+                'noise': 'Noise Complaint',
+                'business': 'Business Issue',
+                'environmental': 'Environmental',
+                'other': 'Other Matters'
+            };
+            return typeMap[type] || (type ? type.charAt(0).toUpperCase() + type.slice(1) : 'General');
+        }
+
         function loadSettings() {
             apiRequest('getSettings', { token: authToken })
                 .then(function (result) {
@@ -2818,6 +3298,7 @@
                 return;
             }
 
+            settings = settings || {};
             var clone = table.cloneNode(true);
             var actionCells = clone.querySelectorAll('.table-actions');
             for (var i = 0; i < actionCells.length; i++) {

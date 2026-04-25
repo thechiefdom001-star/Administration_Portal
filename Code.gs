@@ -1,5 +1,5 @@
 /**
- * KAAS - Kenya Area Administration System
+ * KAAS - Kenya Area Administration Systems
  * Spreadsheet-backed Apps Script data layer
  */
 
