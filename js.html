@@ -1,0 +1,107 @@
+<script>
+var authToken = localStorage.getItem('kaas_token');
+var currentUser = null;
+
+function showTab(tab) {
+    var loginForm = document.getElementById('loginForm');
+    var signupForm = document.getElementById('signupForm');
+    var tabs = document.querySelectorAll('.tab');
+    tabs[0].classList.remove('active');
+    tabs[1].classList.remove('active');
+    if (tab === 'login') {
+        loginForm.classList.remove('hidden');
+        signupForm.classList.add('hidden');
+        tabs[0].classList.add('active');
+        document.getElementById('authTitle').textContent = 'Welcome Back';
+    } else {
+        loginForm.classList.add('hidden');
+        signupForm.classList.remove('hidden');
+        tabs[1].classList.add('active');
+        document.getElementById('authTitle').textContent = 'Create Account';
+    }
+}
+
+function doLogin(e) {
+    e.preventDefault();
+    var username = document.getElementById('loginUser').value;
+    var password = document.getElementById('loginPass').value;
+    google.script.run
+        .withSuccessHandler(function(result) {
+            if (result.success) {
+                authToken = result.token;
+                currentUser = result.user;
+                localStorage.setItem('kaas_token', authToken);
+                showApp();
+            } else {
+                alert(result.message);
+            }
+        })
+        .withFailureHandler(function(e) { alert('Error: ' + e.message); })
+        .login(username, password);
+    return false;
+}
+
+function doSignup(e) {
+    e.preventDefault();
+    var data = {
+        username: document.getElementById('signupUser').value,
+        password: document.getElementById('signupPass').value,
+        fullName: document.getElementById('signupName').value,
+        role: document.getElementById('signupRole').value
+    };
+    google.script.run
+        .withSuccessHandler(function(result) {
+            if (result.success) {
+                alert('Account created! Please login.');
+                showTab('login');
+            } else {
+                alert(result.message);
+            }
+        })
+        .withFailureHandler(function(e) { alert('Error: ' + e.message); })
+        .signup(data);
+    return false;
+}
+
+function showApp() {
+    document.getElementById('authPage').style.display = 'none';
+    document.getElementById('appPage').style.display = 'block';
+    loadPage('dashboard');
+}
+
+function loadPage(page) {
+    document.getElementById('pageTitle').textContent = page;
+    var area = document.getElementById('contentArea');
+    if (page === 'dashboard') {
+        area.innerHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px;">' +
+            '<div style="background:white;padding:20px;border-top:4px solid #1E3A5F;"><h3>0</h3><p>Total</p></div>' +
+            '<div style="background:white;padding:20px;border-top:4px solid #FF6B35;"><h3>0</h3><p>Pending</p></div>' +
+            '<div style="background:white;padding:20px;border-top:4px solid #00A651;"><h3>0</h3><p>Resolved</p></div>' +
+            '<div style="background:white;padding:20px;border-top:4px solid #D4AF37;"><h3>0%</h3><p>Rate</p></div>' +
+            '</div>' +
+            '<div style="background:white;padding:20px;"><p>Dashboard loaded.</p></div>';
+    } else {
+        area.innerHTML = '<div style="background:white;padding:20px;"><p>' + page + ' page.</p></div>';
+    }
+}
+
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+}
+
+// Check token on load
+document.addEventListener('DOMContentLoaded', function() {
+    if (authToken) {
+        google.script.run
+            .withSuccessHandler(function(result) {
+                if (result.success && result.user) {
+                    currentUser = result.user;
+                    showApp();
+                } else {
+                    localStorage.removeItem('kaas_token');
+                }
+            })
+            .validateToken(authToken);
+    }
+});
+</script>
