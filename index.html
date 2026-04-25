@@ -914,7 +914,18 @@
                             <input type="password" id="signupConfirmPassword" class="form-control"
                                 placeholder="Re-enter password" required>
                         </div>
-                        <button type="submit" class="btn btn-primary">Create Account</button>
+                        <div id="otpSection" class="hidden" style="background:#F3F4F6; padding:18px; border-radius:12px; margin-bottom:20px; border:1px solid #D1D5DB; animation: fadeIn 0.3s ease-out;">
+                            <label style="font-weight:700; color:#1E3A5F; display:block; margin-bottom:4px;">Verification Required</label>
+                            <p style="font-size:12px; color:#6B7280; margin-bottom:12px; line-height:1.4;">A verification code was sent to the Super Admin. Please enter it below to complete your registration.</p>
+                            <input type="text" id="signupOtp" class="form-control" placeholder="Enter 6-digit code" maxlength="6" style="text-align:center; font-size:20px; letter-spacing:4px; font-weight:700;">
+                            <button type="button" class="btn btn-primary" style="margin-top:14px; width:100%;" onclick="handleVerifyOTPAndSignup()"><i class="fas fa-user-check"></i> Verify & Complete Registration</button>
+                            <div style="text-align:center; margin-top:10px;">
+                                <a href="#" onclick="cancelOtp();return false;" style="font-size:12px; color:#6B7280;">Change details</a>
+                            </div>
+                        </div>
+                        <div id="signupActionSection">
+                            <button type="submit" class="btn btn-primary">Create Account</button>
+                        </div>
                         <div style="margin-top:16px; text-align:center;">
                             <a href="#" onclick="showAuthTab('login');return false;"
                                 style="color:#1E3A5F;font-size:13px;">Already have an account? Login</a>
@@ -1160,6 +1171,11 @@
 
         function normalizeApiUrl(value) {
             return String(value || '').replace(/\s+/g, '').replace(/\/+$/, '');
+        }
+
+        function truncate(text, maxLength) {
+            if (!text || text.length <= maxLength) return text;
+            return text.substring(0, maxLength) + '...';
         }
 
         function setConfiguredApiUrl(value) {
@@ -1546,7 +1562,7 @@
         }
 
         function handleLogin(event) {
-            event.preventDefault();
+            if (event) event.preventDefault();
 
             if (!hasConfiguredApiUrl()) {
                 showToast('Configure the deployed URL first through Super Admin.', 'warning');
@@ -1581,8 +1597,10 @@
             return false;
         }
 
+        var pendingSignupData = null;
+
         function handleSignup(event) {
-            event.preventDefault();
+            if (event) event.preventDefault();
 
             if (!hasConfiguredApiUrl()) {
                 showToast('Configure the deployed URL first through Super Admin.', 'warning');
@@ -1598,38 +1616,96 @@
             var confirmPassword = document.getElementById('signupConfirmPassword').value;
 
             if (password !== confirmPassword) {
-                showToast('Passwords do not match.', 'error');
+                showToast('Passwords do not match.', 'warning');
                 return false;
             }
 
-            if (password.length < 6) {
-                showToast('Password must be at least 6 characters.', 'error');
+            var signupData = {
+                fullName: fullName,
+                username: username,
+                phone: phone,
+                role: role,
+                password: password
+            };
+
+            // Sensitive roles require OTP verification from Super Admin
+            if (role === 'chief' || role === 'desk_officer') {
+                showToast('Requesting verification from Super Admin...', 'info');
+                apiRequest('sendRegistrationOTP', { payload: signupData })
+                    .then(function(result) {
+                        if (result && result.success) {
+                            pendingSignupData = signupData;
+                            document.getElementById('otpSection').classList.remove('hidden');
+                            document.getElementById('signupActionSection').classList.add('hidden');
+                            showToast(result.message, 'success');
+                        } else {
+                            showToast(result && result.message ? result.message : 'Unable to request verification.', 'error');
+                        }
+                    })
+                    .catch(function(err) {
+                        showToast('Connection error. Please try again.', 'error');
+                    });
                 return false;
             }
 
-            apiRequest('signup', {
-                payload: {
-                    username: username,
-                    password: password,
-                    fullName: fullName,
-                    role: role,
-                    phone: phone
-                }
-            })
+            // Residents can register directly
+            registerUser(signupData);
+            return false;
+        }
+
+        function handleVerifyOTPAndSignup() {
+            var otp = document.getElementById('signupOtp').value;
+            if (!otp || otp.length < 4) {
+                showToast('Please enter the verification code.', 'warning');
+                return;
+            }
+
+            if (!pendingSignupData) {
+                showToast('Signup data lost. Please start over.', 'error');
+                cancelOtp();
+                return;
+            }
+
+            var data = Object.assign({}, pendingSignupData, { otp: otp });
+            
+            showToast('Verifying code...', 'info');
+            apiRequest('verifyOTPAndSignup', { payload: data })
+                .then(function(result) {
+                    if (result && result.success) {
+                        showToast('Verification successful! You can now log in.', 'success');
+                        showAuthTab('login');
+                        pendingSignupData = null;
+                        document.getElementById('signupForm').reset();
+                        cancelOtp();
+                    } else {
+                        showToast(result && result.message ? result.message : 'Invalid verification code.', 'error');
+                    }
+                })
+                .catch(function(err) {
+                    showToast('Verification failed. Try again.', 'error');
+                });
+        }
+
+        function cancelOtp() {
+            document.getElementById('otpSection').classList.add('hidden');
+            document.getElementById('signupActionSection').classList.remove('hidden');
+            document.getElementById('signupOtp').value = '';
+        }
+
+        function registerUser(data) {
+            apiRequest('signup', { payload: data })
                 .then(function (result) {
                     if (result && result.success) {
                         showToast(result.message, 'success');
-                        document.getElementById('signupForm').reset();
                         showAuthTab('login');
+                        document.getElementById('signupForm').reset();
                         return;
                     }
-                    showToast(result && result.message ? result.message : 'Signup failed.', 'error');
+                    showToast(result && result.message ? result.message : 'Registration failed.', 'error');
                 })
                 .catch(function (error) {
-                    showToast(getErrorMessage('Signup failed', error), 'error');
+                    showToast(getErrorMessage('Registration failed', error), 'error');
                 });
-
-            return false;
         }
 
         function handleLogout() {
@@ -1763,6 +1839,17 @@
                 (canManageCases ? '<button class="btn btn-secondary btn-sm" onclick="navigateTo(\'cases\')"><i class="fas fa-list"></i> View All Cases</button>' : '') +
                 '</div>';
 
+            var announcementsHtml = currentAnnouncements.slice(0, 3).map(function (item) {
+                return '<div style="padding:14px; border-bottom:1px solid #F3F4F6; display:flex; gap:14px; align-items:flex-start;">' +
+                    '<div style="background:#EEF2FF; color:#4F46E5; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="fas fa-bullhorn"></i></div>' +
+                    '<div style="flex:1;">' +
+                    '<div style="font-weight:600; font-size:14px; color:#1E3A5F; margin-bottom:2px;">' + escapeHtml(item.title) + '</div>' +
+                    '<div style="font-size:12px; color:#6B7280; line-height:1.4;">' + escapeHtml(truncate(item.content, 80)) + '</div>' +
+                    '<div style="font-size:10px; color:#9CA3AF; margin-top:4px;">' + formatDate(item.createdAt) + '</div>' +
+                    '</div>' +
+                    '</div>';
+            }).join('') || '<div style="padding:20px; text-align:center; color:#9CA3AF;">No recent announcements</div>';
+
             contentArea.innerHTML = '' +
                 '<div class="stats-grid">' +
                 '<div class="stat-card"><div style="position:absolute;top:0;left:0;right:0;height:4px;background:#1E3A5F;"></div><div style="display:flex;align-items:flex-start;gap:18px;"><div class="stat-icon primary"><i class="fas fa-folder-open"></i></div><div><h3 style="font-size:32px;font-weight:700;line-height:1;margin-bottom:6px;">' + (stats.total || 0) + '</h3><p style="font-size:14px;color:#6B7280;">Total Cases</p></div></div></div>' +
@@ -1770,7 +1857,14 @@
                 '<div class="stat-card"><div style="position:absolute;top:0;left:0;right:0;height:4px;background:#00A651;"></div><div style="display:flex;align-items:flex-start;gap:18px;"><div class="stat-icon" style="background:rgba(0,166,81,0.1);color:#00A651;"><i class="fas fa-check-circle"></i></div><div><h3 style="font-size:32px;font-weight:700;line-height:1;margin-bottom:6px;">' + (stats.resolved || 0) + '</h3><p style="font-size:14px;color:#6B7280;">Resolved</p></div></div></div>' +
                 '<div class="stat-card"><div style="position:absolute;top:0;left:0;right:0;height:4px;background:#D4AF37;"></div><div style="display:flex;align-items:flex-start;gap:18px;"><div class="stat-icon" style="background:rgba(212,175,55,0.1);color:#D4AF37;"><i class="fas fa-percentage"></i></div><div><h3 style="font-size:32px;font-weight:700;line-height:1;margin-bottom:6px;">' + (stats.resolutionRate || 0) + '%</h3><p style="font-size:14px;color:#6B7280;">Resolution Rate</p></div></div></div>' +
                 '</div>' +
-                '<div class="card"><div class="card-header"><h3 class="card-title">Quick Actions</h3></div>' + quickActions + '</div>' +
+                '<div style="display:grid; grid-template-columns: 1fr 350px; gap:24px; margin-bottom:24px;">' +
+                '<div class="card" style="margin-bottom:0;"><div class="card-header"><h3 class="card-title">Quick Actions</h3></div>' + quickActions + '</div>' +
+                '<div class="card" style="margin-bottom:0; padding:0;">' +
+                '<div class="card-header" style="padding:16px 24px;"><h3 class="card-title">Latest Announcements</h3></div>' +
+                '<div style="max-height:220px; overflow-y:auto;">' + announcementsHtml + '</div>' +
+                '<div style="padding:12px; text-align:center; border-top:1px solid #F3F4F6;"><button class="btn btn-sm" style="color:#4F46E5; background:none; border:none; font-weight:600;" onclick="navigateTo(\'announcements\')">View All Announcements</button></div>' +
+                '</div>' +
+                '</div>' +
                 '<div class="card">' +
                 '<div class="card-header">' +
                 '<h3 class="card-title">Recent Cases</h3>' +
@@ -2592,6 +2686,9 @@
                 '<div class="settings-grid">' +
                 '<div class="form-group"><label>Office Name</label><input type="text" id="officeName" class="form-control" value="' + escapeHtml(settings.officeName || '') + '"></div>' +
                 '<div class="form-group"><label>Location</label><input type="text" id="officeLocation" class="form-control" value="' + escapeHtml(settings.location || '') + '"></div>' +
+                '</div>' +
+                '<div class="settings-grid" style="margin-bottom:20px;">' +
+                '<div class="form-group"><label>Super Admin Email (For OTPs)</label><input type="email" id="superAdminEmail" class="form-control" value="' + escapeHtml(settings.superAdminEmail || '') + '" placeholder="admin@example.com"></div>' +
                 '<div class="form-group"><label>Registry API URL (For Persistence)</label><input type="text" id="apiUrlSync" class="form-control" value="' + escapeHtml(settings.apiUrl || getConfiguredApiUrl()) + '" placeholder="Shared deployment URL"></div>' +
                 '</div>' +
                 '<div class="form-group"><label>Office Address</label><textarea id="officeAddress" class="form-control" style="min-height:90px;">' + escapeHtml(settings.officeAddress || '') + '</textarea></div>' +
@@ -2620,6 +2717,7 @@
                 footerText: document.getElementById('footerText').value,
                 smsNotifications: document.getElementById('smsNotifications').checked,
                 emailNotifications: document.getElementById('emailNotifications').checked,
+                superAdminEmail: document.getElementById('superAdminEmail').value,
                 apiUrl: document.getElementById('apiUrlSync') ? document.getElementById('apiUrlSync').value : (cachedSettings.apiUrl || getConfiguredApiUrl())
             };
 
