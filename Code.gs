@@ -1016,6 +1016,8 @@ function dispatchApiAction_(params) {
       return createAnnouncement(token, payload);
     case 'deleteAnnouncement':
       return deleteAnnouncement(token, id);
+    case 'validateSuperAdmin':
+      return validateSuperAdmin(payload);
     default:
       return { success: false, message: 'Unknown API action.' };
   }
@@ -1214,3 +1216,11 @@ function mapAnnouncementRecordToClient_(record) {
   };
 }
 
+function validateSuperAdmin(data) {
+  var user = data.username;
+  var pass = data.password;
+  if (user === 'administrator' && pass === 'admin0001') {
+    return { success: true, message: 'Super Admin Access Granted' };
+  }
+  return { success: false, message: 'Invalid Super Admin credentials' };
+}

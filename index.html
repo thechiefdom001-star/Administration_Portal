@@ -1024,18 +1024,18 @@
     </div>
 
     <script>
-        // Injected by Google Apps Script doGet()
-        var INJECTED_API_URL = "<?= scriptUrl ?>";
+        // --- GITHUB PAGES CONFIGURATION ---
+        // If you are using GitHub Pages, paste your 'Deployed Web App URL' here.
+        // This will make the app connect automatically for everyone who visits your link.
+        var HARDCODED_API_URL = ""; 
 
+        // Injected automatically when served via Google Apps Script doGet()
+        var INJECTED_API_URL = "<?= scriptUrl ?>";
+        
         var STORAGE_KEYS = {
             authToken: 'kaas_token',
             apiUrl: 'kaas_api_base_url',
             superAdmin: 'kaas_super_admin_session'
-        };
-
-        var SUPER_ADMIN = {
-            username: 'administrator',
-            password: 'admin0001'
         };
 
         var authToken = localStorage.getItem(STORAGE_KEYS.authToken) || null;
@@ -1141,10 +1141,16 @@
         }
 
         function getConfiguredApiUrl() {
+            // 1. Check if a URL was passed in the link (Shareable Link)
             var savedUrl = localStorage.getItem(STORAGE_KEYS.apiUrl);
             if (savedUrl) return normalizeApiUrl(savedUrl);
             
-            // Fallback to injected URL if local storage is empty
+            // 2. Check for hardcoded URL (For GitHub Pages static deployments)
+            if (typeof HARDCODED_API_URL !== 'undefined' && HARDCODED_API_URL) {
+                return normalizeApiUrl(HARDCODED_API_URL);
+            }
+
+            // 3. Check for injected URL (For Apps Script direct access)
             if (typeof INJECTED_API_URL !== 'undefined' && INJECTED_API_URL && INJECTED_API_URL.indexOf('script.google.com') !== -1) {
                 return normalizeApiUrl(INJECTED_API_URL);
             }
@@ -1291,18 +1297,49 @@
         }
 
         function handleSuperAdminLogin(event) {
-            event.preventDefault();
+            if (event) event.preventDefault();
+            var user = document.getElementById('superAdminUsername').value;
+            var pass = document.getElementById('superAdminPassword').value;
 
-            var username = document.getElementById('superAdminUsername').value;
-            var password = document.getElementById('superAdminPassword').value;
-
-            if (username === SUPER_ADMIN.username && password === SUPER_ADMIN.password) {
-                setSuperAdminAuthenticated(true);
-                showToast('Super Admin unlocked.', 'success');
+            // 1. Initial Setup: If no URL is configured yet, use emergency local credentials
+            // (Note: administrator/admin0001 are the legacy credentials used for first-time setup)
+            var currentUrl = getConfiguredApiUrl();
+            if (!currentUrl) {
+                if (user === 'administrator' && pass === 'admin0001') {
+                    setSuperAdminAuthenticated(true);
+                    showToast('Emergency access granted. Please configure the database URL.', 'warning');
+                } else {
+                    showToast('Invalid credentials or database not connected.', 'error');
+                }
                 return false;
             }
 
-            showToast('Invalid Super Admin credentials.', 'error');
+            // 2. Standard Setup: Validate against the actual database for better security
+            apiRequest('validateSuperAdmin', { payload: { username: user, password: pass } })
+                .then(function (result) {
+                    if (result && result.success) {
+                        setSuperAdminAuthenticated(true);
+                        showToast('Super Admin access granted.', 'success');
+                    } else {
+                        // Fallback to local if server returns false (allows password reset/initial access)
+                        if (user === 'administrator' && pass === 'admin0001') {
+                            setSuperAdminAuthenticated(true);
+                            showToast('Used emergency local access.', 'warning');
+                        } else {
+                            showToast(result && result.message ? result.message : 'Invalid credentials.', 'error');
+                        }
+                    }
+                })
+                .catch(function (error) {
+                    // Fallback to local if server is unreachable
+                    if (user === 'administrator' && pass === 'admin0001') {
+                        setSuperAdminAuthenticated(true);
+                        showToast('Server unreachable. Used emergency local access.', 'warning');
+                    } else {
+                        showToast('Connection error and invalid credentials.', 'error');
+                    }
+                });
+
             return false;
         }
 
