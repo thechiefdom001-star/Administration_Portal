@@ -928,16 +928,14 @@
                             <div class="form-group">
                                 <label>Super Admin Username</label>
                                 <input type="text" id="superAdminUsername" class="form-control"
-                                    placeholder="administrator" required>
+                                    placeholder="Enter username" required>
                             </div>
                             <div class="form-group">
                                 <label>Super Admin Password</label>
                                 <input type="password" id="superAdminPassword" class="form-control"
-                                    placeholder="admin0001" required>
+                                    placeholder="Enter password" required>
                             </div>
                             <button type="submit" class="btn btn-primary">Unlock Connection Settings</button>
-                            <div class="help-text">Embedded credentials: <strong>administrator</strong> /
-                                <strong>admin0001</strong></div>
                         </form>
                     </div>
 
@@ -956,6 +954,10 @@
                             <button type="button" class="btn btn-primary btn-sm"
                                 onclick="saveDeploymentUrlFromInput('deploymentUrlEntry', true)">
                                 <i class="fas fa-save"></i> Save URL
+                            </button>
+                            <button type="button" class="btn btn-success btn-sm"
+                                onclick="copyShareableLink()">
+                                <i class="fas fa-share-alt"></i> Shareable Link
                             </button>
                             <button type="button" class="btn btn-secondary btn-sm"
                                 onclick="testDeploymentUrlFromInput('deploymentUrlEntry')">
@@ -1049,6 +1051,7 @@
         var editingDocumentId = null;
 
         document.addEventListener('DOMContentLoaded', function () {
+            checkUrlParameters();
             updateConnectionNotice();
             renderSuperAdminPanel();
 
@@ -1076,9 +1079,52 @@
                 .catch(function (error) {
                     clearUserSession();
                     showAuth();
-                    showToast(getErrorMessage('Connection error', error), 'error');
                 });
         });
+
+        function checkUrlParameters() {
+            var params = new URLSearchParams(window.location.search);
+            var apiParam = params.get('api');
+            if (apiParam) {
+                var normalized = normalizeApiUrl(apiParam);
+                if (normalized) {
+                    localStorage.setItem(STORAGE_KEYS.apiUrl, normalized);
+                    // Clear the URL parameter to keep it clean
+                    var newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                    window.history.replaceState({path:newUrl}, '', newUrl);
+                    showToast('Database connection configured automatically.', 'success');
+                }
+            }
+        }
+
+        function copyShareableLink() {
+            var apiUrl = getConfiguredApiUrl();
+            if (!apiUrl) {
+                showToast('Please configure and save the deployment URL first.', 'warning');
+                return;
+            }
+            
+            var baseUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            var shareUrl = baseUrl + '?api=' + encodeURIComponent(apiUrl);
+            
+            copyToClipboard(shareUrl);
+            showToast('Shareable link copied to clipboard! Share this link to connect other devices automatically.', 'success');
+        }
+
+        function copyToClipboard(text) {
+            var input = document.createElement('textarea');
+            input.value = text;
+            input.style.position = 'fixed';
+            input.style.opacity = 0;
+            document.body.appendChild(input);
+            input.select();
+            try {
+                document.execCommand('copy');
+            } catch (err) {
+                console.error('Copy failed', err);
+            }
+            document.body.removeChild(input);
+        }
 
         function clearUserSession() {
             localStorage.removeItem(STORAGE_KEYS.authToken);
